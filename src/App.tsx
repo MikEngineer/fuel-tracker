@@ -1,4 +1,19 @@
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import {
+  initDriveClient,
+  subscribeAuth,
+  getAuthState,
+  ensureSignedIn,
+  signOut,
+  type DriveAuthState
+} from './services/googleDrive';
+import {
+  resetCache,
+  reloadFromDrive,
+  subscribeArchive,
+  type ArchiveInfo
+} from './db';
 
 const navItems = [
   { to: '/', label: 'Home', icon: HomeIcon },
@@ -9,13 +24,79 @@ const navItems = [
 
 export default function App(){
   const location = useLocation();
+  const [authState, setAuthState] = useState<DriveAuthState>(() => getAuthState());
+  const [archiveInfo, setArchiveInfo] = useState<ArchiveInfo | null>(null);
+  const readyRef = useRef(false);
+
+  useEffect(() => {
+    initDriveClient().catch(() => {
+      /* lo stato di errore viene gestito dal client */
+    });
+    const unsubscribeAuth = subscribeAuth(setAuthState);
+    const unsubscribeArchive = subscribeArchive((info) => {
+      if (info.created || info.hasData){
+        setArchiveInfo(info);
+      } else {
+        setArchiveInfo(null);
+      }
+    });
+    return () => {
+      unsubscribeAuth();
+      unsubscribeArchive();
+    };
+  }, []);
+
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+
+  const readyForApp = authState.signedIn && !authState.loading && !authState.error;
+
+  useEffect(() => {
+    if (!readyForApp){
+      readyRef.current = false;
+      if (!authState.signedIn){
+        setArchiveInfo(null);
+      }
+      return;
+    }
+    if (!readyRef.current){
+      reloadFromDrive().catch((error) => {
+        console.error('Errore nel caricamento dell\'archivio Google Drive', error);
+      });
+      readyRef.current = true;
+    }
+  }, [readyForApp, authState.signedIn]);
+
+  async function handleConnect(){
+    try {
+      await ensureSignedIn();
+    } catch (error){
+      console.error('Errore durante la connessione a Google Drive', error);
+    }
+  }
+
+  async function handleSignOut(){
+    try {
+      await signOut();
+    } finally {
+      resetCache();
+      setArchiveInfo(null);
+      readyRef.current = false;
+    }
+  }
 
   return (
     <div className="app-shell">
       <div className="app-body">
-        <Outlet />
+        <DriveStatusBanner state={authState} onConnect={handleConnect} onSignOut={handleSignOut} />
+        {readyForApp && archiveInfo && <ArchiveInfoBanner info={archiveInfo} />}
+        {readyForApp ? (
+          <Outlet />
+        ) : !authState.loading && !authState.error ? (
+          <div className="card empty-state">
+            Collega Google Drive per iniziare a tracciare i rifornimenti.
+          </div>
+        ) : null}
       </div>
       <nav className="bottom-nav">
         <div className="bottom-nav__content">
@@ -31,14 +112,102 @@ export default function App(){
             </Link>
           ))}
           <Link
-            to="/refuels/new"
-            className="bottom-nav__fab"
+            to={readyForApp ? '/refuels/new' : '#'}
+            className={`bottom-nav__fab${readyForApp ? '' : ' bottom-nav__fab--disabled'}`}
             aria-label="Nuovo rifornimento"
+            onClick={(event) => {
+              if (!readyForApp){
+                event.preventDefault();
+                handleConnect();
+              }
+            }}
           >
             <PlusIcon />
           </Link>
         </div>
       </nav>
+    </div>
+  );
+}
+
+function DriveStatusBanner({ state, onConnect, onSignOut }: {
+  state: DriveAuthState;
+  onConnect: () => void;
+  onSignOut: () => void;
+}){
+  if (state.loading){
+    return <div className="card empty-state">Connessione a Google Drive…</div>;
+  }
+  if (state.error){
+    return (
+      <div className="card hero-card">
+        <span className="stat-card__label">Google Drive</span>
+        <div className="hero-card__name">Connessione non riuscita</div>
+        <p className="hero-card__meta">{state.error}</p>
+        <button className="btn w-full" onClick={onConnect}>Riprova collegamento</button>
+      </div>
+    );
+  }
+  if (!state.signedIn){
+    return (
+      <div className="card hero-card">
+        <span className="stat-card__label">Google Drive</span>
+        <div className="hero-card__name">Nessun account collegato</div>
+        <p className="hero-card__meta">
+          Collega il tuo account Google Drive per salvare veicoli e rifornimenti nel cloud.
+        </p>
+        <button className="btn w-full" onClick={onConnect}>Collega Google Drive</button>
+      </div>
+    );
+  }
+  return (
+    <div className="card">
+      <div className="row">
+        <div>
+          <div className="stat-card__label">Google Drive</div>
+          <div className="hero-card__meta">
+            Connesso come {state.userName || state.userEmail || 'utente'}
+          </div>
+        </div>
+        <button className="btn-alt" onClick={onSignOut}>Disconnetti</button>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveInfoBanner({ info }: { info: ArchiveInfo }){
+  if (info.hasData){
+    return (
+      <div className="card">
+        <div className="row">
+          <div>
+            <div className="stat-card__label">Archivio Google Drive</div>
+            <div className="hero-card__meta">Dati sincronizzati dal tuo archivio nel cloud.</div>
+          </div>
+          <span className="pill">Sincronizzato</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (info.created){
+    return (
+      <div className="card hero-card">
+        <span className="stat-card__label">Archivio Google Drive</span>
+        <div className="hero-card__name">Nuovo archivio creato</div>
+        <p className="hero-card__meta">
+          Non abbiamo trovato dati esistenti, quindi abbiamo preparato un nuovo archivio per questo account.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card hero-card">
+      <span className="stat-card__label">Archivio Google Drive</span>
+      <div className="hero-card__meta">
+        Nessun dato è presente nell'archivio: verrà popolato automaticamente con i prossimi rifornimenti.
+      </div>
     </div>
   );
 }
