@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Indica i file sorgente a Tailwind v4 (per il tree-shaking delle classi) */
+@source "../index.html" "../src/**/*.{ts,tsx}";
+
+/* Palette Tailwind v4 tramite @theme */
+@theme {
+  --color-primary: #7C4DFF;
+  --color-accent:  #FF8E3C;
+  --color-bg:      #0B0B10;
+  --color-surface: #141420;
+  --color-on:      #E5E5F0;
+}
+
+/* Forza schema scuro e colori di base leggibili ovunque */
+:root { color-scheme: dark; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-on);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+               Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+/* Link visibili */
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Stili app SENZA @apply (compatibili con v4) */
+.card {
+  background-color: var(--color-surface);
+  border-radius: 16px;     /* ~ rounded-2xl */
+  padding: 1rem;           /* ~ p-4 */
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  color: var(--color-on);
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;    /* ~ px-4 py-2 */
+  border-radius: 12px;     /* ~ rounded-xl */
+  background-color: var(--color-primary);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+}
+.btn:active { opacity: 0.9; }
+
+.btn-alt {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  text-align: center;
+  font-weight: 600;
+  background: transparent;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem; /* ~ px-3 py-2 */
+  border-radius: 12px;
+  background: #1C1C2A;
+  color: var(--color-on);
+  outline: none;
+}
+.input::placeholder { color: #9CA3AF; } /* zinc-400 */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
