@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import dayjs from 'dayjs';
 
-type F = {
+export type RefuelFormData = {
   date: string;
   odometer: number;
   liters: number;
@@ -9,8 +9,14 @@ type F = {
   notes?: string;
 };
 
-export default function RefuelForm({onSubmit, initial}:{onSubmit:(v:F)=>void; initial?:Partial<F>}){
-  const { register, handleSubmit, watch } = useForm<F>({
+export default function RefuelForm({
+  onSubmit,
+  initial
+}:{
+  onSubmit: (v: RefuelFormData) => void;
+  initial?: Partial<RefuelFormData>;
+}){
+  const { register, handleSubmit, watch } = useForm<RefuelFormData>({
     defaultValues: {
       date: initial?.date ?? dayjs().toISOString(),
       odometer: initial?.odometer ?? undefined,
@@ -19,25 +25,43 @@ export default function RefuelForm({onSubmit, initial}:{onSubmit:(v:F)=>void; in
       notes: initial?.notes ?? ''
     }
   });
-  const l = Number(watch('liters')||0);
-  const p = Number(watch('price_per_liter')||0);
-  const cost = isFinite(l*p) ? (l*p).toFixed(2) : '0.00';
+  const liters = Number(watch('liters') || 0);
+  const price = Number(watch('price_per_liter') || 0);
+  const cost = isFinite(liters * price) ? (liters * price).toFixed(2) : '0.00';
 
   return (
-    <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
-      <div className="card space-y-2">
-        <label className="block text-sm">Data ISO</label>
-        <input className="input" {...register('date')}/>
-        <label className="block text-sm">Contachilometri (km)</label>
-        <input className="input" type="number" step="1" {...register('odometer',{valueAsNumber:true})}/>
-        <label className="block text-sm">Litri</label>
-        <input className="input" type="number" step="0.01" {...register('liters',{valueAsNumber:true})}/>
-        <label className="block text-sm">Prezzo/L (€)</label>
-        <input className="input" type="number" step="0.001" {...register('price_per_liter',{valueAsNumber:true})}/>
-        <div className="text-sm opacity-80">Pieno: <span className="text-primary font-semibold">sì</span></div>
-        <label className="block text-sm">Note (opz.)</label>
-        <textarea className="input" rows={2} {...register('notes')}/>
-        <div className="row"><div className="opacity-80">Costo stimato</div><div className="font-semibold">€ {cost}</div></div>
+    <form className="form-stack" onSubmit={handleSubmit(onSubmit)}>
+      <div className="card">
+        <div className="form-stack">
+          <div>
+            <label className="form-label" htmlFor="refuel-date">Data ISO</label>
+            <input id="refuel-date" className="input" {...register('date')} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="refuel-odo">Contachilometri (km)</label>
+            <input id="refuel-odo" className="input" type="number" step="1" {...register('odometer', { valueAsNumber: true })} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="refuel-liters">Litri</label>
+            <input id="refuel-liters" className="input" type="number" step="0.01" {...register('liters', { valueAsNumber: true })} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="refuel-price">Prezzo/L (€)</label>
+            <input id="refuel-price" className="input" type="number" step="0.001" {...register('price_per_liter', { valueAsNumber: true })} />
+          </div>
+          <div className="refuel-flag">
+            <span className="refuel-flag__label">Pieno</span>
+            <span className="pill">Sì</span>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="refuel-notes">Note (opzionali)</label>
+            <textarea id="refuel-notes" className="input" rows={3} {...register('notes')} />
+          </div>
+        </div>
+        <div className="refuel-summary">
+          <span className="form-label">Costo stimato</span>
+          <span className="refuel-summary__value">€ {cost}</span>
+        </div>
       </div>
       <button className="btn w-full" type="submit">Salva</button>
     </form>

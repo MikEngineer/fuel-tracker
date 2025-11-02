@@ -1,8 +1,8 @@
-export default function StatCard({title, value}:{title:string; value:string}){
+export default function StatCard({ title, value }: { title: string; value: string }){
   return (
-    <div className="card">
-      <div className="text-sm opacity-80">{title}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
+    <div className="card stat-card">
+      <span className="stat-card__label">{title}</span>
+      <span className="stat-card__value">{value}</span>
     </div>
   );
 }
