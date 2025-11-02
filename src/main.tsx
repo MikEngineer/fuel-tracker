@@ -9,6 +9,7 @@ import Refuels from './pages/Refuels';
 import NewRefuel from './pages/NewRefuel';
 import Stats from './pages/Stats';
 import Backup from './pages/Backup';
+import AuthCallback from './pages/AuthCallback';
 
 const router = createBrowserRouter([
   { path:'/', element:<App/>, children:[
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
     { path:'refuels/new', element:<NewRefuel/> },
     { path:'stats', element:<Stats/> },
     { path:'backup', element:<Backup/> },
+    { path:'auth/callback', element:<AuthCallback/> },
   ]}
 ]);
 

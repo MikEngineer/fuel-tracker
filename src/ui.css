@@ -426,6 +426,18 @@ textarea.input:focus {
   transform: translate(-50%, 46%);
 }
 
+.bottom-nav__fab--disabled {
+  opacity: 0.45;
+  pointer-events: auto;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: linear-gradient(135deg, rgba(124, 124, 140, 0.5), rgba(72, 72, 92, 0.5));
+}
+
+.bottom-nav__fab--disabled:hover {
+  transform: translate(-50%, 50%);
+}
+
 @media (min-width: 768px) {
   .app-body {
     padding-left: 2.5rem;

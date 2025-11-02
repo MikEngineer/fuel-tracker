@@ -27,3 +27,14 @@ export type Segment = {
   kml: number;
   eurkm: number;
 };
+
+export type FuelStore = {
+  version: number;
+  vehicles: Vehicle[];
+  refuels: Refuel[];
+};
+
+export type ArchiveInfo = {
+  created: boolean;
+  hasData: boolean;
+};

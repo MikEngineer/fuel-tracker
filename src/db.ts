@@ -1,121 +1,9 @@
-// import Dexie, { type Table } from 'dexie';
-// import type { Vehicle, Refuel } from './types';
+import type { Vehicle, Refuel, FuelStore, ArchiveInfo } from './types';
+import { fetchArchive, saveArchive } from './services/cloudApi';
 
-// class FuelDB extends Dexie {
-//   vehicles!: Table<Vehicle, number>;
-//   refuels!: Table<Refuel, number>;
-//   constructor(){
-//     super('fuel_tracker_web');
-//     this.version(1).stores({
-//       vehicles: '++id, name, plate, tank_capacity_l, created_at',
-//       refuels:  '++id, vehicle_id, date, odometer, is_full'
-//     });
-//   }
-// }
+export type { FuelStore, ArchiveInfo } from './types';
 
-// export const db = new FuelDB();
-
-// // Vehicles
-// export async function vehiclesAll(){ return db.vehicles.toArray(); }
-// export async function vehicleGet(id:number){ return db.vehicles.get(id); }
-// export async function vehicleCreate(v: Omit<Vehicle,'id'|'created_at'>){
-//   return db.vehicles.add({ ...v, created_at: new Date().toISOString() });
-// }
-
-// // Refuels
-// async function lastOdo(vehicle_id:number){
-//   const list = await db.refuels.where('vehicle_id').equals(vehicle_id).sortBy('odometer');
-//   return list.length ? list[list.length-1].odometer : null;
-// }
-// export async function refuelsByVehicle(vid:number){
-//   return db.refuels.where('vehicle_id').equals(vid).sortBy('date');
-// }
-// export async function refuelGet(id:number){ return db.refuels.get(id); }
-// export async function refuelCreate(r: Omit<Refuel,'id'|'is_full'|'created_at'>){
-//   const prev = await lastOdo(r.vehicle_id);
-//   if (prev !== null && r.odometer < prev) throw new Error('Contachilometri decrescente');
-//   return db.refuels.add({ ...r, is_full:1, created_at: new Date().toISOString() });
-// }
-
-// ________________________________________________________________________________________________________
-
-// import Dexie, { type Table } from 'dexie';
-// import type { Vehicle, Refuel } from './types';
-
-// const MIGRATION_EPOCH = Date.UTC(2000, 0, 1);
-
-// type MigrationModifyContext = { primaryKey: unknown };
-
-// class FuelDB extends Dexie {
-//   vehicles!: Table<Vehicle, number>;
-//   refuels!: Table<Refuel, number>;
-//   constructor(){
-//     super('fuel_tracker_web');
-//     this.version(1).stores({
-//       vehicles: '++id, name, plate, tank_capacity_l',
-//       refuels:  '++id, vehicle_id, date, odometer, is_full'
-//     });
-
-//     this.version(2)
-//       .stores({
-//         vehicles: '++id, name, plate, tank_capacity_l, created_at',
-//         refuels:  '++id, vehicle_id, date, odometer, is_full'
-//       })
-//       .upgrade(async (tx) => {
-//         const table = tx.table('vehicles');
-//         await table.toCollection().modify((vehicle, ctx: MigrationModifyContext) => {
-//           if (vehicle.created_at) return;
-//           const key = typeof ctx.primaryKey === 'number' ? ctx.primaryKey : Date.now();
-//           vehicle.created_at = new Date(MIGRATION_EPOCH + key * 1000).toISOString();
-//         });
-//       });
-//   }
-// }
-
-// export const db = new FuelDB();
-
-// // Vehicles
-// export async function vehiclesAll(){ return db.vehicles.toArray(); }
-// export async function vehicleGet(id:number){ return db.vehicles.get(id); }
-// export async function vehicleFirst(){
-//   return db.vehicles.orderBy('created_at').first();
-// }
-// export async function vehicleCreate(v: Omit<Vehicle,'id'|'created_at'>){
-//   return db.vehicles.add({ ...v, created_at: new Date().toISOString() });
-// }
-
-// // Refuels
-// async function lastOdo(vehicle_id:number){
-//   const list = await db.refuels.where('vehicle_id').equals(vehicle_id).sortBy('odometer');
-//   return list.length ? list[list.length-1].odometer : null;
-// }
-// export async function refuelsByVehicle(vid:number){
-//   return db.refuels.where('vehicle_id').equals(vid).sortBy('date');
-// }
-// export async function refuelGet(id:number){ return db.refuels.get(id); }
-// export async function refuelCreate(r: Omit<Refuel,'id'|'is_full'|'created_at'>){
-//   const prev = await lastOdo(r.vehicle_id);
-//   if (prev !== null && r.odometer < prev) throw new Error('Contachilometri decrescente');
-//   return db.refuels.add({ ...r, is_full:1, created_at: new Date().toISOString() });
-// }
-
-// __________________________________________________________________________________________________
-
-import type { Vehicle, Refuel } from './types';
-import { loadFuelData, saveFuelData } from './services/googleDrive';
-
-export type FuelStore = {
-  version: number;
-  vehicles: Vehicle[];
-  refuels: Refuel[];
-};
-
-export type ArchiveInfo = {
-  created: boolean;
-  hasData: boolean;
-};
-
-type ArchiveListener = (info: ArchiveInfo) => void;
+export type ArchiveListener = (info: ArchiveInfo) => void;
 
 const createEmptyStore = (): FuelStore => ({
   version: 1,
@@ -124,7 +12,7 @@ const createEmptyStore = (): FuelStore => ({
 });
 
 let store: FuelStore = createEmptyStore();
-let fileId: string | null = null;
+let hasLoaded = false;
 let loadPromise: Promise<void> | null = null;
 let archiveInfo: ArchiveInfo = { created: false, hasData: false };
 const archiveListeners = new Set<ArchiveListener>();
@@ -147,7 +35,7 @@ export function getArchiveInfo(){
 }
 
 function clone<T>(value: T): T {
-  if (value === undefined) return value;
+  if (value === undefined) return value as T;
   return JSON.parse(JSON.stringify(value));
 }
 
@@ -159,7 +47,7 @@ function normalizeVehicle(raw: unknown): Vehicle | null {
   return {
     id: typeof data.id === 'number' ? data.id : undefined,
     name: name ?? 'Veicolo senza nome',
-    plate: data.plate ?? null,
+    plate: typeof data.plate === 'string' ? data.plate : null,
     tank_capacity_l: typeof data.tank_capacity_l === 'number' ? data.tank_capacity_l : null,
     created_at: created
   };
@@ -185,8 +73,8 @@ function normalizeRefuel(raw: unknown): Refuel | null {
     liters,
     price_per_liter: price,
     is_full: 1,
-    station: data.station ?? null,
-    notes: data.notes ?? null,
+    station: typeof data.station === 'string' ? data.station : null,
+    notes: typeof data.notes === 'string' ? data.notes : null,
     created_at: created
   };
 }
@@ -207,37 +95,33 @@ function normalizeStore(payload: unknown): FuelStore {
   };
 }
 
-function updateArchiveInfo(created?: boolean){
-  if (typeof created === 'boolean'){
-    archiveInfo.created = created;
-  }
-  archiveInfo.hasData = store.vehicles.length > 0 || store.refuels.length > 0;
+function refreshArchiveInfo(next?: Partial<ArchiveInfo>){
+  archiveInfo = {
+    created: typeof next?.created === 'boolean' ? next.created : archiveInfo.created,
+    hasData:
+      typeof next?.hasData === 'boolean'
+        ? next.hasData
+        : store.vehicles.length > 0 || store.refuels.length > 0
+  };
   notifyArchive();
 }
 
 async function ensureLoaded(){
-  if (fileId) return;
+  if (hasLoaded) return;
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
-    const empty = createEmptyStore();
-    const { id, data, created } = await loadFuelData(empty);
-    fileId = id;
-    store = normalizeStore(data);
-    updateArchiveInfo(created);
+    const { store: remote, info } = await fetchArchive();
+    store = normalizeStore(remote);
+    hasLoaded = true;
+    refreshArchiveInfo(info);
   })();
   await loadPromise;
   loadPromise = null;
 }
 
-async function ensureFileId(){
-  if (fileId) return;
-  await ensureLoaded();
-}
-
 async function persist(){
-  await ensureFileId();
-  if (!fileId) throw new Error('File di archivio Google Drive non pronto.');
-  await saveFuelData(fileId, store);
+  const info = await saveArchive(store);
+  refreshArchiveInfo(info);
 }
 
 function nextVehicleId(){
@@ -282,7 +166,7 @@ export async function vehicleCreate(v: Omit<Vehicle, 'id' | 'created_at'>){
     created_at: now
   };
   store.vehicles.push(vehicle);
-  updateArchiveInfo();
+  refreshArchiveInfo();
   await persist();
   return vehicle.id!;
 }
@@ -325,7 +209,7 @@ export async function refuelCreate(r: Omit<Refuel, 'id' | 'is_full' | 'created_a
     created_at: new Date().toISOString()
   };
   store.refuels.push(refuel);
-  updateArchiveInfo();
+  refreshArchiveInfo();
   await persist();
   return refuel.id!;
 }
@@ -338,20 +222,21 @@ export async function exportSnapshot(){
 export async function importSnapshot(snapshot: FuelStore){
   await ensureLoaded();
   store = normalizeStore(snapshot);
-  updateArchiveInfo();
+  refreshArchiveInfo();
   await persist();
 }
 
 export async function reloadFromDrive(){
-  fileId = null;
-  store = createEmptyStore();
-  await ensureLoaded();
+  const { store: remote, info } = await fetchArchive();
+  store = normalizeStore(remote);
+  hasLoaded = true;
+  refreshArchiveInfo(info);
   return getArchiveInfo();
 }
 
 export function resetCache(){
-  fileId = null;
   store = createEmptyStore();
+  hasLoaded = false;
   loadPromise = null;
   archiveInfo = { created: false, hasData: false };
   notifyArchive();
